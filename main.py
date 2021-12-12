@@ -50,6 +50,7 @@ class Moneyrobot():
             self.aloitus()
             self.tutki_tapahtumat()
             self.piirra_naytto()
+            self.arvonta()
     
     def aloitus(self):
         while self.alku:
@@ -64,8 +65,6 @@ class Moneyrobot():
             self.tutki_tapahtumat()
 
     def piirra_naytto(self): #Täällä piirretään näytölle tapahtuvat asiat
-
-        self.arvonta() #Arvotaan kolikoita tai hirviöitä
 
         self.naytto.fill((230,230,230))
 
@@ -97,8 +96,12 @@ class Moneyrobot():
         if self.peli_ohi: #Pysäytetään animaatiot ja ilmoitetaan pelin loppuminen
             pygame.draw.rect(self.naytto, (200,200,200), (30, 300, 390, 100))
             pygame.draw.rect(self.naytto, (230,230,230), (40, 310, 370, 80))
-            teksti = self.fontti.render("Peli ohi, sait kerättyä " +str(self.keratyt_kolikot) + " kolikkoa", True, (0,0,0))
-            teksti2 = self.fontti.render("Uusi peli paina F2, poistu painamalla ESC", True, (0,0,0))
+            if self.keratyt_kolikot == 1:
+                teksti = self.fontti.render("Peli ohi, sait kerättyä " +str(self.keratyt_kolikot) + ":n kolikon", True, (0,0,0))
+                teksti2 = self.fontti.render("Uusi peli paina F2, poistu painamalla ESC", True, (0,0,0))
+            else:
+                teksti = self.fontti.render("Peli ohi, sait kerättyä " +str(self.keratyt_kolikot) + " kolikkoa", True, (0,0,0))
+                teksti2 = self.fontti.render("Uusi peli paina F2, poistu painamalla ESC", True, (0,0,0))
             self.naytto.blit(teksti, (50, self.korkeus/2))
             self.naytto.blit(teksti2, (50, ((self.korkeus/2)+30)))
             pygame.display.flip()
