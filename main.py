@@ -9,7 +9,7 @@ class Moneyrobot():
         self.lataa_kuvat()
         self.taso = 0
         self.kolikot = 0
-        self.korkeus = 480
+        self.korkeus = 640
         self.leveys = 640
         self.peli_ohi = False
         self.kello = pygame.time.Clock()
@@ -17,12 +17,12 @@ class Moneyrobot():
         self.oikealle = False
         self.robox = int(self.leveys/2-(self.robo.get_width()/2)) # Robotti aloittaa aina keskeltä
         self.roboy = int(self.korkeus-100) #Robotti aloittaa aina -100 alareunasta
+        self.juoksu = 0 #vaikeustason määritykseen apumuuttuja
         self.putoavat()
-        
-        
+        self.alku = True
 
         self.naytto = pygame.display.set_mode((self.leveys, self.korkeus))
-        self.fontti = pygame.font.SysFont("Cambria", 24)
+        self.fontti = pygame.font.SysFont("Cambria", 20)
         pygame.display.set_caption("Moneyrobot")
 
         self.silmukka()
@@ -30,10 +30,9 @@ class Moneyrobot():
     def lataa_kuvat(self):
         self.hirvio = pygame.image.load("hirvio.png")
         self.kolikko = pygame.image.load("kolikko.png")
-        self.ovi = pygame.image.load("ovi.png")
         self.robo = pygame.image.load("robo.png")
 
-    def putoavat(self): #täällä on putoaviin vihollisiin ja kolikkoihin määritettävät listat
+    def putoavat(self): #täällä on putoaviin vihollisiin ja kolikkoihin määritettävät muuttujat
         self.viholliset = []
         self.kolikot = []
         self.vihumaara = 0
@@ -43,25 +42,32 @@ class Moneyrobot():
         self.vihux = []
         self.kolikkox = []
         self.kolikkoy = []
-        self.putoavan_nopeus = 1
-        self.putoavien_maara = 200 #tätä pienentämällä saa enemmän putoavia
+        self.putoavan_nopeus = 1 
+        self.putoavien_maara = 200 #tätä pienentämällä saa enemmän putoavia 
 
     def silmukka(self):
         while True:
+            self.aloitus()
             self.tutki_tapahtumat()
             self.piirra_naytto()
-            
+    
+    def aloitus(self):
+        while self.alku:
+            self.naytto.fill((230,230,230))
+            aloitus_teksti = self.fontti.render("Tervetuloa, ohjaat robottia nuolinäppäimillä.", True, (0,0,0))
+            aloitus_teksti2 = self.fontti.render("Tavoitteenasi on kerätä mahdollisimman monta kolikkoa.", True, (0,0,0))
+            aloitus_teksti3 = self.fontti.render("Paina Enter aloittaaksesi", True, (0,0,0))
+            self.naytto.blit(aloitus_teksti, (20, (self.korkeus/2)))
+            self.naytto.blit(aloitus_teksti2, (20, (self.korkeus/2)+20))
+            self.naytto.blit(aloitus_teksti3, (20, (self.korkeus/2)+40))
+            pygame.display.flip()
+            self.tutki_tapahtumat()
+
     def piirra_naytto(self): #Täällä piirretään näytölle tapahtuvat asiat
 
         self.arvonta() #Arvotaan kolikoita tai hirviöitä
 
         self.naytto.fill((230,230,230))
-
-        teksti = self.fontti.render("Taso: " + str(self.taso), True, (255, 0 ,0))
-        self.naytto.blit(teksti, (25, 10))
-
-        teksti = self.fontti.render("Kerätyt kolikot: " +str(self.keratyt_kolikot), True, (255,0,0))
-        self.naytto.blit(teksti, (430, 10))
 
         for i in range (0, self.kolikkomaara): #Liikutetaan kolikoita ja määritetään osumat robotin kanssa
             kolikon_keskipiste_x = self.kolikkox[i]+(self.kolikot[i].get_width()/2)
@@ -74,6 +80,7 @@ class Moneyrobot():
             if self.robox <= kolikon_keskipiste_x and self.robox+self.robo.get_width() >= kolikon_keskipiste_x and self.roboy <= kolikon_keskipiste_y and self.roboy+self.robo.get_height() >= kolikon_keskipiste_y:
                 self.kolikkoy[i]+=400
                 self.keratyt_kolikot += 1 
+                self.juoksu = 0
 
 
         for i in range (0, self.vihumaara): #Liikutetaan vihollisia ja määritetään osumat robotin kanssa
@@ -88,14 +95,21 @@ class Moneyrobot():
                 self.peli_ohi = True
 
         if self.peli_ohi: #Pysäytetään animaatiot ja ilmoitetaan pelin loppuminen
+            pygame.draw.rect(self.naytto, (200,200,200), (30, 300, 390, 100))
+            pygame.draw.rect(self.naytto, (230,230,230), (40, 310, 370, 80))
             teksti = self.fontti.render("Peli ohi, sait kerättyä " +str(self.keratyt_kolikot) + " kolikkoa", True, (0,0,0))
             teksti2 = self.fontti.render("Uusi peli paina F2, poistu painamalla ESC", True, (0,0,0))
             self.naytto.blit(teksti, (50, self.korkeus/2))
-            self.naytto.blit(teksti2, (50, ((self.korkeus/2)+50)))
+            self.naytto.blit(teksti2, (50, ((self.korkeus/2)+30)))
             pygame.display.flip()
             while True:
                 self.tutki_tapahtumat()
 
+        teksti = self.fontti.render("Taso: " + str(self.taso), True, (255, 0 ,0))
+        self.naytto.blit(teksti, (550, 10))
+
+        teksti = self.fontti.render("Kerätyt kolikot: " +str(self.keratyt_kolikot), True, (255,0,0))
+        self.naytto.blit(teksti, (10, 10))
 
         self.naytto.blit(self.robo, (self.robox, self.roboy))
         pygame.display.flip()
@@ -121,12 +135,15 @@ class Moneyrobot():
                 if tapahtuma.key == pygame.K_F2:
                     Moneyrobot()
 
+                if tapahtuma.key == pygame.K_RETURN:
+                    self.alku = False
+
             if tapahtuma.type == pygame.QUIT:
                 exit()
 
-        self.nopeus = 6
+        self.nopeus = 6 #Robotin nopeus
 
-        if self.robox >= self.nopeus:
+        if self.robox >= self.nopeus:  #Robotin liikkuminen 
             if self.vasemmalle:
                 self.robox -= self.nopeus
         if self.robox+self.robo.get_width() <= (self.leveys - self.nopeus):        
@@ -136,10 +153,13 @@ class Moneyrobot():
     def arvonta(self): #arvotaan hirviöitä ja kolikoita random funktiolla sekä määritetään vaikeustaso
         arvotaanko = random.randint(0, self.putoavien_maara)
         
-        if self.keratyt_kolikot % 10 == 0 and self.keratyt_kolikot != 0:
+        if self.keratyt_kolikot % 10 == 0 and self.keratyt_kolikot != 0 and self.juoksu == 0: #Vaikeustason määritys
             self.putoavan_nopeus += 1
             self.taso += 1
-            self.keratyt_kolikot += 1
+            self.juoksu += 1
+
+            if self.taso == 5:
+                self.putoavien_maara = 150
             if self.taso == 10:
                 self.putoavien_maara = 100
             if self.taso == 15:
@@ -156,7 +176,6 @@ class Moneyrobot():
             self.kolikkox.append(random.randint(0, self.leveys))
             self.kolikkoy.append(-100)
             self.kolikkomaara += 1
-
 
 if __name__ == "__main__":
     Moneyrobot()
