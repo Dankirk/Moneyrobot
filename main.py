@@ -170,13 +170,13 @@ class Moneyrobot():
 
         if arvotaanko in range (1, 4):
             self.viholliset.append(self.hirvio)
-            self.vihux.append(random.randint(0, self.leveys))
+            self.vihux.append(random.randint(0, self.leveys-self.hirvio.get_width()))
             self.vihuy.append(-100)
             self.vihumaara += 1
         
         if arvotaanko in range (2, 5):
             self.kolikot.append(self.kolikko)
-            self.kolikkox.append(random.randint(0, self.leveys))
+            self.kolikkox.append(random.randint(0, self.leveys-self.hirvio.get_width()))
             self.kolikkoy.append(-100)
             self.kolikkomaara += 1
 
