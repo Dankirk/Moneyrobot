@@ -3,6 +3,7 @@ from collections import namedtuple
 import pygame
 import random
 from enum import Enum, IntFlag, auto
+from threading import Thread, Lock
 
 # GameObject on yliluokka kaikille piirrettäville entiteeteille
 class GameObject():
@@ -62,6 +63,7 @@ class GameState(Enum):
     PELI_OHI = auto()
     PELI = auto()
     RESET = auto()
+    CLOSING = auto()
 
 # Suunnat ja niiden yhdistelmät joihin pelaaja voi liikkua
 # Arvoja yhdistellään ja vertaillaan bitwise operaatioilla
@@ -71,6 +73,7 @@ class Direction(IntFlag):
     RIGHT = auto()
 
 Piirto = namedtuple('Piirto', 'funktio staattinen')
+noop = lambda *args, **kwargs: None # lamda funktio, joka ei tee mitään. Joitain pelitiloja ei piirretä lainkaan, tätä käytetään niissä
 
 class Moneyrobot():
 
@@ -80,23 +83,31 @@ class Moneyrobot():
         self.korkeus = 640
         self.leveys = 640
         self.liikkumisuunta = Direction.NONE
-        self.viimeksi_piirretty_tila = GameState.RESET # Tätä käytetään, jotta staattisia näyttöjä ei piirrettäisi uudelleen
 
         # Näytön piirtofunktiot pelitilan mukaan. Näin ei tarvita if-else rakennetta piirrossa
         # Toinen parameteri (staattinen) määrittää päivitetäänkö näyttö vain kerran vai koko ajan
         self.piirto_funktiot = {
             GameState.ALKU: Piirto(self.piirra_alku, True),
             GameState.PELI_OHI: Piirto(self.piirra_peli_ohi, True),
-            GameState.PELI: Piirto(self.piirra_peli, False)
+            GameState.PELI: Piirto(self.piirra_peli, False),
+            GameState.RESET: Piirto(noop, True), # ei piirretä
+            GameState.CLOSING: Piirto(noop, True) # ei piirretä
         }
-
-        self.kello = pygame.time.Clock()
         
         self.naytto = pygame.display.set_mode((self.leveys, self.korkeus))
         self.fontti = pygame.font.SysFont("Cambria", 20)
         pygame.display.set_caption("Moneyrobot")
 
+        pygame.fastevent.init()
         self.reset()
+
+        engine_rate = 60.0 # Kuinka monta kertaa sekunnisa pelin tilanne päivitetään
+        refresh_rate = 60.0 # Kuinka monta kertaa sekunnissa ruutu päivitetään
+
+        # Threadit. Logiikka ja piirto ajetaan muissa threadeissa. Eventit käsitellään main loopissa.
+        self.logiikka_thread = Thread(name="logiikka", target=self.logiikka, args=[engine_rate])
+        self.piirto_thread = Thread(name="piirra_naytto", target=self.piirra_naytto, args=[refresh_rate])
+        self.game_state_lock = Lock() # Lukitus mekanismi, jolla estetään mm. entiteettien yhtäaikainen muokkaus ja piirto
 
         self.silmukka()
 
@@ -120,31 +131,41 @@ class Moneyrobot():
 
 
     def silmukka(self):
-        while True:
 
-            self.piirra_naytto()
-            
-            self.tutki_tapahtumat()
+        # Aloita säikeet
+        self.piirto_thread.start()
+        self.logiikka_thread.start()
 
-            if self.game_state == GameState.PELI:
-                self.logiikka()
+        # Tutki tapahtumia, kunnes peli halutaan sulkea
+        self.tutki_tapahtumat()
 
-            elif self.game_state == GameState.RESET:
-                self.reset()
+        # Merkitse peli suljettavaksi. Muut threadit odottelevat CLOSING tilaa
+        with self.game_state_lock:
+            self.game_state = GameState.CLOSING
 
-            self.kello.tick(60)
+        # Odota threadien normaalia sulkeutumista
+        self.piirto_thread.join()
+        self.logiikka_thread.join()
 
-    def piirra_naytto(self): #Täällä piirretään näytölle tapahtuvat asiat
+    def piirra_naytto(self, refresh_rate): #Täällä piirretään näytölle tapahtuvat asiat
 
-        # Jos staattinen ja kerran jo piirretty, älä piirrä uudelleen
-        if self.piirto_funktiot[self.game_state].staattinen and self.viimeksi_piirretty_tila == self.game_state:
-            return
+        nayton_kello = pygame.time.Clock()
+        viimeksi_piirretty_tila = GameState.RESET # Tätä käytetään, jotta staattisia näyttöjä ei piirrettäisi uudelleen
 
-        # Kutsutaan pelitilannetta vastaava piirtofunktio
-        self.piirto_funktiot[self.game_state].funktio()
+        while self.game_state != GameState.CLOSING:
 
-        pygame.display.flip()
-        self.viimeksi_piirretty_tila = self.game_state
+            with self.game_state_lock:
+
+                # Jos staattinen ja kerran jo piirretty, älä piirrä uudelleen
+                if not self.piirto_funktiot[self.game_state].staattinen or viimeksi_piirretty_tila != self.game_state:
+
+                    # Kutsutaan pelitilannetta vastaava piirtofunktio
+                    self.piirto_funktiot[self.game_state].funktio()
+
+                    pygame.display.flip()
+                    self.viimeksi_piirretty_tila = self.game_state
+
+            nayton_kello.tick(refresh_rate)
 
     def piirra_alku(self):
 
@@ -188,34 +209,35 @@ class Moneyrobot():
         self.naytto.blit(teksti2, (50, ((self.korkeus/2)+30)))
     
     def tutki_tapahtumat(self):
-        for tapahtuma in pygame.event.get():
 
-            if tapahtuma.type == pygame.KEYDOWN:
-                if tapahtuma.key == pygame.K_LEFT:
-                    self.liikkumisuunta |= Direction.LEFT
-                if tapahtuma.key == pygame.K_RIGHT:
-                    self.liikkumisuunta |= Direction.RIGHT
+        tapahtuma = pygame.event.Event(pygame.NOEVENT)
+        while tapahtuma.type != pygame.QUIT:
+
+            tapahtuma = pygame.fastevent.wait() # odottele eventiä loputtomasti
+
+            with self.game_state_lock:
+                if tapahtuma.type == pygame.KEYDOWN:
+                    if tapahtuma.key == pygame.K_LEFT:
+                        self.liikkumisuunta |= Direction.LEFT
+                    if tapahtuma.key == pygame.K_RIGHT:
+                        self.liikkumisuunta |= Direction.RIGHT
             
-            if tapahtuma.type == pygame.KEYUP:
-                if tapahtuma.key == pygame.K_LEFT:
-                    self.liikkumisuunta &= ~Direction.LEFT
-                if tapahtuma.key == pygame.K_RIGHT:
-                    self.liikkumisuunta &= ~Direction.RIGHT
+                if tapahtuma.type == pygame.KEYUP:
+                    if tapahtuma.key == pygame.K_LEFT:
+                        self.liikkumisuunta &= ~Direction.LEFT
+                    if tapahtuma.key == pygame.K_RIGHT:
+                        self.liikkumisuunta &= ~Direction.RIGHT
 
-                if tapahtuma.key == pygame.K_ESCAPE:
-                    exit()
-                if tapahtuma.key == pygame.K_F2:
-                    self.game_state = GameState.RESET
+                    if tapahtuma.key == pygame.K_ESCAPE:
+                        break   # poistu while loopista
+                    if tapahtuma.key == pygame.K_F2:
+                        self.game_state = GameState.RESET
 
-                if tapahtuma.key == pygame.K_RETURN:
-                    self.game_state = GameState.PELI
-
-            if tapahtuma.type == pygame.QUIT:
-                exit()
+                    if tapahtuma.key == pygame.K_RETURN:
+                        self.game_state = GameState.PELI
 
 
-    def logiikka(self): #arvotaan hirviöitä ja kolikoita random funktiolla sekä määritetään vaikeustaso
-
+    def paivita_tila(self): #arvotaan hirviöitä ja kolikoita random funktiolla sekä määritetään vaikeustaso
 
         self.robo.liiku(self.liikkumisuunta, self.leveys) #Robotin liikkuminen 
         
@@ -269,6 +291,26 @@ class Moneyrobot():
         if arvotaanko in range (2, 5):
             sijanti = random.randint(0, self.leveys - Kolikko.oletus_leveys()), -100
             self.kolikot.append(Kolikko(sijanti))
+
+
+    def logiikka(self, engine_rate):
+
+        logiikka_kello = pygame.time.Clock()
+
+        while self.game_state != GameState.CLOSING:
+
+            # lukitse pelitila, jotta piirto funktio ei voi piirtää keskeneräistä tilannetta
+            with self.game_state_lock:
+
+                # Resetoi peli...
+                if self.game_state == GameState.RESET:
+                    self.reset()
+
+                # ... Tai päivitä pelin tila, jos ollaan pelaamassa
+                elif self.game_state == GameState.PELI:
+                    self.paivita_tila()
+
+            logiikka_kello.tick(engine_rate) 
 
 if __name__ == "__main__":
     Moneyrobot()
