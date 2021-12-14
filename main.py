@@ -58,17 +58,17 @@ class Robo(GameObject):
 
 # Pelitilanteet. Pelin täytyy aina olla jossain näistä tiloista
 class GameState(Enum):
-    ALKU = 1
-    PELI_OHI = 2
-    PELI = 3
-    RESET = 4
+    ALKU = auto()
+    PELI_OHI = auto()
+    PELI = auto()
+    RESET = auto()
 
 # Suunnat ja niiden yhdistelmät joihin pelaaja voi liikkua
 # Arvoja yhdistellään ja vertaillaan bitwise operaatioilla
 class Direction(IntFlag):
+    NONE = 0
     LEFT = auto()
     RIGHT = auto()
-    NONE = auto()
 
 Piirto = namedtuple('Piirto', 'funktio staattinen')
 
@@ -263,10 +263,12 @@ class Moneyrobot():
         
         # Lisätään vihollisia ja kolikoita
         if arvotaanko in range (1, 4):
-            self.viholliset.append(Hirvio((random.randint(0, self.leveys - Hirvio.oletus_leveys()), -100)))
+            sijanti = random.randint(0, self.leveys - Hirvio.oletus_leveys()), -100
+            self.viholliset.append(Hirvio(sijanti))
         
         if arvotaanko in range (2, 5):
-            self.kolikot.append(Kolikko((random.randint(0, self.leveys - Kolikko.oletus_leveys()), -100)))
+            sijanti = random.randint(0, self.leveys - Kolikko.oletus_leveys()), -100
+            self.kolikot.append(Kolikko(sijanti))
 
 if __name__ == "__main__":
     Moneyrobot()
