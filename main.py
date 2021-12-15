@@ -29,8 +29,8 @@ class GameObject():
 
 class Putoava(GameObject):
 
-    def liiku(self):
-        self.hitbox.y += self.nopeus
+    def liiku(self, speed_scale):
+        self.hitbox.y += round(self.nopeus * speed_scale)
 
 class Kolikko(Putoava):
 
@@ -47,15 +47,17 @@ class Robo(GameObject):
     oletus_grafiikka = pygame.image.load("robo.png")
     nopeus = 6
 
-    def liiku(self, direction, leveys_raja):
+    def liiku(self, direction, leveys_raja, speed_scale):
+
+        movement = round(self.nopeus * speed_scale)
 
         if (direction & Direction.LEFT) == Direction.LEFT:
-            if self.hitbox.x >= self.nopeus:
-                self.hitbox.x -= self.nopeus
+            if self.hitbox.x >= movement:
+                self.hitbox.x -= movement
 
         if (direction & Direction.RIGHT) == Direction.RIGHT:
-            if self.hitbox.x + self.grafiikka.get_width() <= (leveys_raja - self.nopeus):        
-                self.hitbox.x += self.nopeus
+            if self.hitbox.x + self.grafiikka.get_width() <= (leveys_raja - movement):        
+                self.hitbox.x += movement
 
 # Pelitilanteet. Pelin täytyy aina olla jossain näistä tiloista
 class GameState(Enum):
@@ -120,8 +122,6 @@ class Moneyrobot():
         robox = int(self.leveys/2-(Robo.oletus_leveys()) / 2) # Robotti aloittaa aina keskeltä
         roboy = int(self.korkeus-100) #Robotti aloittaa aina -100 alareunasta
         self.robo = Robo((robox, roboy))
-
-        self.juoksu = 0 #vaikeustason määritykseen apumuuttuja
 
         #putoaviin vihollisiin ja kolikkoihin määritettävät muuttujat
         self.viholliset = []
@@ -233,18 +233,18 @@ class Moneyrobot():
                     if tapahtuma.key == pygame.K_F2:
                         self.game_state = GameState.RESET
 
-                    if tapahtuma.key == pygame.K_RETURN:
+                    if tapahtuma.key == pygame.K_RETURN and self.game_state == GameState.ALKU:
                         self.game_state = GameState.PELI
 
 
-    def paivita_tila(self): #arvotaan hirviöitä ja kolikoita random funktiolla sekä määritetään vaikeustaso
+    def paivita_tila(self, speed_scale): #arvotaan hirviöitä ja kolikoita random funktiolla sekä määritetään vaikeustaso
 
-        self.robo.liiku(self.liikkumisuunta, self.leveys) #Robotin liikkuminen 
+        self.robo.liiku(self.liikkumisuunta, self.leveys, speed_scale) #Robotin liikkuminen 
         
         for i in range(len(self.kolikot) -1, -1, -1): #Liikutetaan kolikoita ja määritetään osumat robotin kanssa
             # Käydään lista läpi takaperin (aloittaen lopusta), jotta ruudulta poistuvat elementit voidaan poistaa samalla
 
-            self.kolikot[i].liiku()
+            self.kolikot[i].liiku(speed_scale)
 
             if self.robo.collides(self.kolikot[i]):
                 del self.kolikot[i]
@@ -258,7 +258,7 @@ class Moneyrobot():
 
         for i in range(len(self.viholliset) -1, -1, -1): #Liikutetaan vihollisia ja määritetään osumat robotin kanssa
 
-            self.viholliset[i].liiku()
+            self.viholliset[i].liiku(speed_scale)
 
             if self.robo.collides(self.viholliset[i]):
                 self.game_state = GameState.PELI_OHI
@@ -296,8 +296,13 @@ class Moneyrobot():
     def logiikka(self, engine_rate):
 
         logiikka_kello = pygame.time.Clock()
+        ideal_tick_duration = 1000 / engine_rate
 
         while self.game_state != GameState.CLOSING:
+
+            # speed_scale on kerroin ruudulla liikkuville entiteeteille. 
+            # Kaikki liikkumiset tulisi kertoa tällä, jotta liike näyttää vakiolta, vaikka enginen framerate ei ole
+            speed_scale = logiikka_kello.tick(engine_rate) / ideal_tick_duration
 
             # lukitse pelitila, jotta piirto funktio ei voi piirtää keskeneräistä tilannetta
             with self.game_state_lock:
@@ -308,9 +313,7 @@ class Moneyrobot():
 
                 # ... Tai päivitä pelin tila, jos ollaan pelaamassa
                 elif self.game_state == GameState.PELI:
-                    self.paivita_tila()
-
-            logiikka_kello.tick(engine_rate) 
+                    self.paivita_tila(speed_scale)
 
 if __name__ == "__main__":
     Moneyrobot()
