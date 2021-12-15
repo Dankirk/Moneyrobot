@@ -123,6 +123,8 @@ class Moneyrobot():
         roboy = int(self.korkeus-100) #Robotti aloittaa aina -100 alareunasta
         self.robo = Robo((robox, roboy))
 
+        self.juoksu = 0
+
         #putoaviin vihollisiin ja kolikkoihin määritettävät muuttujat
         self.viholliset = []
         self.kolikot = []
